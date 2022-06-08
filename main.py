@@ -7,6 +7,7 @@ import numpy as np
 #Tache de Generation: Genère des représentants
 (x_train, y_train), (x_test, y_test) = mnist.load_data()
 X = x_train
+Y = y_train
 
 K = 9
 epochs = 200
@@ -28,14 +29,25 @@ plt.show()
 
 #Visualisation : renvoie la repartition des points selon leur representant le plus proche
 cluster = k_means.cluster
-representant =[]
-heights = []
+liste = []
+liste_dict =[]
 for k in range(len(k_means.centroids)):
-    representant.append(k)
-    heights.append(np.sum(np.where(cluster == k)))
+    liste = np.where(cluster == k)[0] #liste des indices qui ont k pour centroide le plus proche
+    dict_heights = {"0": 0, "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0, "8": 0, "9": 0}
 
-plt.bar(representant,heights)
-plt.title("Repartition du dataset à chaqsue représentant")
+    for x in liste:
+        dict_heights[str(Y[x])]=dict_heights[str(Y[x])]+1
+    liste_dict.append(dict_heights)
+
+col = 3
+images =[]
+repres = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+for x in range(k_means.K):
+    heights = list(liste_dict[x].values())
+    plt.subplot(int(len(repres) / col+1), col, x + 1)
+    plt.bar(repres,heights)
+
+plt.suptitle("Repartition du dataset pour chaque représentant")
 plt.show()
 
 #Compression/Decompression : renvoyer ce qui se trouve dans l'espace latent pour avoir estimer à quel point on peut compresser une image
