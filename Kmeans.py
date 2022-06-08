@@ -8,6 +8,7 @@ class Kmeans:
     # Y: int
     K: int
     stop: int
+    cluster = []
     centroids = []
 
     def __init__(self,X,K,stop):
@@ -29,6 +30,7 @@ class Kmeans:
             for j, c in enumerate(self.centroids):
                 distances[j] = np.linalg.norm(x - c) #calcule la distane d'un point à un centroide
             centroids_label[i] = np.argmin(distances) #donne l'indice du centroide le plus proche de ce point x
+        self.cluster = centroids_label
         for i, k in enumerate(range(self.K)):
             group_by_k = np.where(centroids_label == k) # récupère les indices des points qui ont le centroide k plus proche
             new_centroids[i] = np.mean(self.X[group_by_k], axis=0) #prend la moyenne des points qui ont le centroid k comme plus proche centroide
@@ -52,12 +54,23 @@ class Kmeans:
 
         self.centroids = centroids
 
+    def encode(self, point):
+        """Cette fonction est utilisée pour encoder un point,
+        en prenant un noouveau point quel output on aura en fonction des distances des représentants"""
+        distances = np.empty(len(self.centroids))
+        for j, c in enumerate(self.centroids):
+            distances[j] = np.linalg.norm(point - c)
+
+        return self.centroids[np.argmin(distances)]
+
+
+
 if __name__ == "__main__":
     (x_train, y_train), (x_test, y_test) = mnist.load_data()
     X =x_train
 
     K = 10
-    epochs = 100
+    epochs = 200
     model = Kmeans(X, K, epochs)
     model.fit()
     print(model.centroids)
