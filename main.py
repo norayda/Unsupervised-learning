@@ -2,6 +2,9 @@ from Kmeans import Kmeans
 import matplotlib.pyplot as plt
 from tensorflow.keras.datasets import mnist
 import numpy as np
+from PCA import *
+
+from tensorflow.keras.datasets import fashion_mnist
 
 ####KMeans
 #Tache de Generation: Genère des représentants
@@ -61,5 +64,37 @@ for i, image in enumerate(images):
 plt.show()
 
 
+
+####PCA
+
+print("PCA")
+
+X, Y = load_mnist()
+n_components = 6
+model = Pca(X=X, n_components=n_components)
+res = model.fit()
+
+x = res[:, 0]
+y = res[:, 1]
+# z = res[:,2]
+colors = ['black', 'red', 'green', 'blue', 'cyan', "brown", "gray", "yellow", "forestgreen", "turquoise"]
+
+fig, ax = plt.subplots()
+# ax = fig.add_subplot(projection='3d')
+c = []
+for i in range(10):
+    c.append(ax.scatter(0, 0, color=colors[i], s=0.1))
+box = ax.get_position()
+ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+
+colors_scatter = []
+for i in Y:
+    colors_scatter.append(colors[i])
+
+# ax.scatter(x, y, z, c = colors_scatter, s=0.1)
+ax.scatter(x, y, c=colors_scatter, s=0.1)
+ax.legend(handles=c, labels=[str(i) for i in range(10)], loc='center left', bbox_to_anchor=(1, 0.5), markerscale=20)
+
+plt.show()
 
 
