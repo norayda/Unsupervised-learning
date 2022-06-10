@@ -1,87 +1,115 @@
 import tensorflow as tf
-from PCA import load_mnist
+import numpy as np
 
-class Vae(tf.keras.Model):
-    def __init__(self) -> None:
-        super(Vae, self).__init__()
-        self.encoder_ = self.make_encoder()
-        self.decoder_ = self.make_decoder()
-        self.optimizer = tf.keras.optimizers.Adam(1e-4)
-        self.model_ = self.make_model()
+import matplotlib.pyplot as plt
 
-        # self.decoder_(out_encoder)
+from tensorflow.keras.datasets import mnist
+import tensorflow as tf
+from tensorflow import keras
+from functools import reduce # Valid in Python 2.6+, required in Python 3
+import operator
 
-        # self.model = tf.keras.Model(self.encoder_, self.decoder_)
+class VAE:
 
-    def make_model(self):
-        ## Encoder
-        encoder_input = tf.keras.layers.Input((28, 28))
+    def __init__(self, layers, X: np.ndarray, validation_x, activation,latent_dim):
+        self.X =X
 
-        layer = tf.keras.layers.Flatten()(encoder_input)
-        layer = tf.keras.layers.Dense(64, activation="tanh")(layer)
-        layer = tf.keras.layers.Dense(32, activation="tanh")(layer)
+        self.validation_x = validation_x
+        self.latent_dim = latent_dim
+        self.decoder = keras.Sequential()
+        self.encoder = keras.Sequential()
 
-        means = tf.keras.layers.Dense(2, activation="linear", name="means")(layer)
-        logvar = tf.keras.layers.Dense(2, activation="linear", name="logvar")(layer)
 
-        ## Decoder
-        output_encoder = tf.keras.layers.concatenate([means, logvar])
+        means,logvar = self._init_encoder(layers,activation)
+        output = self.Sampling(means,logvar)
+        self._init_decoder(layers,activation,output)
+        input_tensor = keras.layers.Input(shape = self.X[0].shape)
+        samplingout = keras.layers.Lambda(lambda x: self.Sampling(*x))(self.encoder(input_tensor))
+        self.model = keras.Model(input_tensor, self.decoder(samplingout))
 
-        layer = tf.keras.layers.Dense(32, activation="tanh")(output_encoder)
-        layer = tf.keras.layers.Dense(64, activation="tanh")(layer)
-        decoded_layer = tf.keras.layers.Dense(784, activation="linear")(layer)
+    def _init_encoder(self, layers, activation):
+        encode_layers = []
+        input_tensor =keras.layers.Input(shape = self.X[0].shape)
+        #encode_layers.append(keras.layers.Reshape((28, 28)))
+        shape = [self.X.shape[-i] for i in range(1,len(self.X.shape))]
+        shape = reduce(operator.mul, shape, 1)
+        encode_layers.append(keras.layers.Flatten())
+        for i, l in enumerate(layers):
+            encode_layers.append(keras.layers.Dense(l, activation=activation, input_shape = (layers[i-1],))) #
+            #encode_layers.append(keras.layers.Reshape((28,28)))
+        output = keras.Sequential(encode_layers)(input_tensor)
+        means = tf.keras.layers.Dense(self.latent_dim, activation="linear", name="means")(input_tensor)
+        logvar = tf.keras.layers.Dense(self.latent_dim, activation="linear", name="logvar")(input_tensor)
+        #encode_layers.append(keras.layers.Dense(self.latent_dim, activation=activation,input_shape=[l])) #La dernière couche est
+        self.encoder = keras.Model(input_tensor, [means, logvar])
 
-        return tf.keras.Model(encoder_input, [means, logvar, decoded_layer])
+        return means,logvar
 
-    def make_encoder(self):
-        encoder_input = tf.keras.layers.Input((28, 28))
 
-        layer = tf.keras.layers.Flatten()(encoder_input)
-        layer = tf.keras.layers.Dense(64, activation="tanh")(layer)
-        layer = tf.keras.layers.Dense(32, activation="tanh")(layer)
+    def _init_decoder(self, layers, activation,output):
+        decode_layers = []
+        reverse_layer = layers[::-1]
+        for i, l in enumerate(reverse_layer):
+            decode_layers.append(keras.layers.Dense(l, activation=activation))
+           # decode_layers.append(keras.layers.Reshape((28, 28)))
 
-        means = tf.keras.layers.Dense(2, activation="linear", name="means")(layer)
-        logvar = tf.keras.layers.Dense(2, activation="linear", name="logvar")(layer)
 
-        return tf.keras.Model(encoder_input, [means, logvar])
+        shape = [self.X.shape[-i] for i in range(1,len(self.X.shape))]
+        shape = reduce(operator.mul, shape, 1)
 
-    def make_decoder(self):
+        decode_layers.append(keras.layers.Dense(shape, activation='sigmoid'))
+        decode_layers.append(keras.layers.Reshape(self.X.shape[1:]))
+        self.decoder = keras.Sequential(decode_layers)
 
-        decoder_input = tf.keras.layers.Input((2, 1))
+    def Sampling(self,means,logvar): ###
+        batch = tf.shape(means)[0]
+        dim = tf.shape(means)[1]
+        epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
+        return means + tf.exp(0.5 * logvar) * epsilon
 
-        layer = tf.keras.layers.Dense(32, activation="tanh")(decoder_input)
-        layer = tf.keras.layers.Dense(64, activation="tanh")(layer)
-        last_layer = tf.keras.layers.Dense(784, activation="linear")(layer)
+    def fit(self, epochs, lr,batch_size):
+        loss = tf.keras.losses.MeanSquaredError(reduction='sum')
+        optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
+        self.model.compile(optimizer=optimizer,loss=loss,epochs=epochs,shuffle=True)
+        self.model.fit(x=self.X, y=self.X ,
+                       epochs=epochs,
+                       batch_size=batch_size,
+                       shuffle=True,
+                       validation_data=(self.validation_x, self.validation_x))
 
-        return tf.keras.Model(decoder_input, last_layer)
-
-    def encode_and_sample(self, x):
-        (m, s, _) = self.encode(x)
-        return tf.random.normal((2,), m, s)
-
-    def fit(self, x, epochs, lr):
-        pass
-
-    def train_step(self, x, epochs, lr):
-        with tf.GradientTape() as tape_encoder, tf.GradientTape() as tape_decoder:
-            res = self.encode_and_sample(x)
-            gradients = tape_encoder.gradient(res, self.encoder_.variables)
-            self.optimizer.apply_gradients(
-                zip(gradients, self.encoder_.trainable_variables)
-            )
-
-    def encode(self, X):
-        m, s, _ = self.model_(X)
-        return (m, s)
-
-    def decode(self, X):
-        return self.decoder_(X)
 
 
 if __name__ == "__main__":
-    train_loader,Y = load_mnist()
-    model = Vae()
-    model.fit(train_loader,30,0.01)
 
-    #print(model.model_.summary())
-    model.encoder_(train_loader[0])
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+    X =x_train
+
+    x_train = x_train.astype('float32') / 255.
+    x_test = x_test.astype('float32') / 255.
+    x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
+    x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
+
+    layers = [512,324,64]
+    esp_latent = 10
+    model = VAE(layers, x_train,x_test, 'relu',esp_latent)
+    model.fit(2, 0.01,256)
+
+    id_test = 15 #Indice de l'image à tester
+
+    X_ = X[id_test]
+    #X_ = tf.cast(X_, tf.float32)
+    encoded = model.encoder(np.array([X_]))
+    decoded = model.decoder(np.array(encoded))[0]
+
+    img =tf.reshape(decoded,(28,28))
+
+    #plt.imshow(img)
+    #plt.gray()
+    #plt.show()
+
+    fig, (ax1,ax2) = plt.subplots(1,2)
+    plt.gray()
+    ax1.imshow(X[id_test])
+    ax2.imshow(img)
+
+    plt.show()

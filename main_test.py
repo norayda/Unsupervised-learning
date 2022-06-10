@@ -2,7 +2,9 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import itertools
+import random
+from matplotlib import cm
 from tensorflow.keras.datasets import mnist
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 
@@ -10,6 +12,8 @@ from sklearn.model_selection import train_test_split
 from Kmeans import Kmeans
 from PCA import Pca
 from AutoEncoder import AutoEncoder
+from kohonen import *
+from VAE import VAE
 
 from IPython.display import display
 
@@ -19,6 +23,7 @@ def Get_Dataset():
     test_dir = 'archive/kaggle_simpson_testset/kaggle_simpson_testset'
 
     Name=[]
+    #Récupère le nom des catégories
     for file in os.listdir(data_dir):
         if(file !='.DS_Store'):
             Name+=[file]
@@ -29,15 +34,11 @@ def Get_Dataset():
     for i in range(len(Name)):
         N += [i]
 
-    normal_mapping = dict(zip(Name, N))
-
-
-    def mapper(value):
-        return normal_mapping[value]
 
     dataset=[]
-    labels =[]
     count=0
+    #On a réduit le nombre de catégorie à 3, ce qui nous fait 1056 images
+    Name = Name[:3]
     for name in Name:
         path=os.path.join(data_dir,name)
         for im in os.listdir(path):
@@ -45,8 +46,7 @@ def Get_Dataset():
                 image=load_img(os.path.join(path,im), grayscale=False, color_mode='rgb', target_size=(100,100))
                 image=img_to_array(image)
                 image=image/255.0
-                dataset.append([image,str(path).split("/")[-1]])
-                #labels.append(str(path).split("/")[-1]) #On récupère les noms de chaque personnage sur l'image
+                dataset.append([image,str(path).split("/")[-1]]) #Le dataset contient l'image et le nom de sa catégorie(le personage
         count=count+1
 
     testset=[]
@@ -72,7 +72,7 @@ def Get_Dataset():
 
     trainx,testx,trainy,testy=train_test_split(data,labels,test_size=0.2,random_state=44)
 
-    #print(trainx.shape)
+    print(trainx.shape)
     #print(testx.shape)
     #print(trainy.shape)
     #print(testy.shape)
@@ -127,13 +127,9 @@ def Test_Kmeans(X,Y,name,K,epochs, ligne,col):
 
 
 def Test_PCA(X,Y,n_components):
-    X =np.reshape(
-        X, (np.shape(X)[0], np.shape(X)[1] * np.shape(X)[2])
-    )
-    X = X / 255.0
+
     model = Pca(X=X, n_components=n_components)
     res = model.fit()
-
     x = res[:, 0]
     y = res[:, 1]
     # z = res[:,2]
@@ -155,19 +151,95 @@ def Test_PCA(X,Y,n_components):
     ax.scatter(x, y, c=colors_scatter, s=0.1)
     ax.legend(handles=c, labels=[str(i) for i in range(10)], loc='center left', bbox_to_anchor=(1, 0.5), markerscale=20)
 
-def Test_AutoEncoder():
+    encoded = np.dot(X[0], model.main_composants)
+    encoded = model.encode(X[0])
+    print(np.shape(encoded))
+
+    decoded = np.dot(encoded, np.transpose(model.main_composants))
+    print(np.shape(decoded))
+    decoded = np.reshape(decoded, (28, 28))
+
+    spaces = []
+    for i in range(n_components):
+        spaces.append(np.linspace(-2000, 1000, random.randint(1, 5)))
+
+    print(spaces)
+
+    images = []
+    for val in itertools.product(*spaces):
+        decoded = model.decode(val)
+        decoded = np.reshape(decoded, (28, 28))
+        images.append(decoded)
+
+    fig = plt.figure(figsize=(28, 28))
+    columns = 28
+    for i, image in enumerate(images):
+        plt.subplot(int(len(images) / columns + 1), int(columns), i + 1)
+        plt.imshow(image, cmap='gray')
+        fig.subplots_adjust(hspace=0, wspace=0)
+    plt.show()
+
+    x = res[:, 0]
+    y = res[:, 1]
+    # z = res[:,2]
+    colors = cm.rainbow(np.linspace(0, 1, len(np.unique(Y))))
+
+    fig, ax = plt.subplots()
+    # ax = fig.add_subplot(projection='3d')
+    c = []
+    for i in range(10):
+        c.append(ax.scatter(0, 0, color=colors[i], s=0.1))
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+
+    colors_scatter = []
+    for i in Y:
+        colors_scatter.append(colors[i])
+
+    # ax.scatter(x, y, z, c = colors_scatter, s=0.1)
+    ax.scatter(x, y, c=colors_scatter, s=0.1)
+    ax.legend(handles=c, labels=[str(i) for i in range(10)], loc='center left', bbox_to_anchor=(1, 0.5), markerscale=20)
+
+def Test_AutoEncoder(x_train,x_test,layers,esp_latent,id_test,epochs):
+
+    model = AutoEncoder(layers, x_train,x_test, 'relu',esp_latent)
+    model.fit(epochs, 0.01,32)
+
+    encoded = model.encoder(np.array([x_train[0]]))
+    decoded = model.decoder(np.array([encoded]))[0]
 
 
-    (x_train, y_train), (x_test, y_test) = mnist.load_data()
-    X = x_train
-    layers = [28, 16, 8]
-    model = AutoEncoder(layers, X,x_test, 'relu',12)
-    model.fit(20, 0.01,256)
+    fig, (ax1,ax2) = plt.subplots(1,2)
+    ax1.imshow(X[id_test])
+    ax2.imshow(decoded)
+    plt.show()
+
+def Test_Kohonen(x_train):
+    ## Custom Dataset
+
+    size_map = x_train
+    K = size_map[0] * size_map[1]
+    gamma = 1
+    lr = 1e-2
+    epochs = 50000
+
+    model = Kohonen(x_train, size_map)
+    model.display_grid((25, 25, 3), int, False)
+    model.fit(epochs, lr, gamma)
+    model.display_grid((25, 25, 3), int, False)
+
+def Test_VAE(x_train,x_test,layers,esp_latent,id_test,epochs):
+
+    model = VAE(layers, x_train,x_test, 'relu',esp_latent)
+    model.fit(epochs, 0.01,32)
+
+    encoded = model.encoder(np.array([x_train[0]]))
+    decoded = model.decoder(np.array([encoded]))[0]
 
 
-    encoded = model.encoder(X[0].to(model.dev))
-    decoded = model.decoder(encoded.to(model.dev))
-    plt.imshow(np.reshape(X[0].numpy(), (25,25, 3)))
+    fig, (ax1,ax2) = plt.subplots(1,2)
+    ax1.imshow(X[id_test])
+    ax2.imshow(decoded)
     plt.show()
 
 
@@ -175,7 +247,7 @@ def Test_AutoEncoder():
 
 if __name__ == "__main__":
 
-    (x_train, x_test, y_train, y_test),name = Get_Dataset()
+    (x_train, x_test, y_train, y_test),name = Get_Dataset() #Environ 40 secondes à s'executer
     X = x_train
     Y = y_train
 
@@ -184,6 +256,13 @@ if __name__ == "__main__":
     ligne = 3
     col = 5
     #Test_Kmeans(X,Y,name,K, epochs, ligne, col)
-    n_components = 6
-    #Test_PCA(X,Y,n_components)
-    Test_AutoEncoder()
+    n_components = 12
+    Test_PCA(X,Y,n_components)
+    layers = [512,324,64,20]
+    esp_latent = 50
+    id_test = 18 # Indice de l'image à tester
+    epochs =2
+    #Test_AutoEncoder(x_train,x_test,layers,esp_latent, id_test,epochs)
+    #Test_VAE(x_train, x_test, layers, esp_latent, id_test, epochs)
+
+    #Test_Kohonen(x_train)
