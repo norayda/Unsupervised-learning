@@ -12,8 +12,8 @@ from tensorflow.keras.datasets import fashion_mnist
 X = x_train
 Y = y_train
 
-K = 9
-epochs = 200
+K = 18
+epochs = 10
 k_means = Kmeans(X, K, epochs)
 k_means.fit()
 #print(k_means.centroids)
@@ -22,12 +22,12 @@ k_means.fit()
 # Plotting starts here
 colors = 10 * ["r", "g", "c", "b", "k"]
 
-fig, axs = plt.subplots(3, 3, figsize = (12, 12))
+fig, axs = plt.subplots(2, 9, figsize = (15, 7))
 plt.gray()
 
 for i, ax in enumerate(axs.flat):
     ax.imshow(k_means.centroids[i])
-plt.title("Représentants générés")
+plt.suptitle("Représentants générés")
 plt.show()
 
 #Visualisation : renvoie la repartition des points selon leur representant le plus proche
@@ -61,7 +61,7 @@ columns = 2
 for i, image in enumerate(images):
     plt.subplot(int(len(images) / columns + 1), columns, i + 1)
     plt.imshow(image, cmap='gray')
-plt.show()
+#plt.show()
 
 
 
@@ -95,6 +95,11 @@ for i in Y:
 ax.scatter(x, y, c=colors_scatter, s=0.1)
 ax.legend(handles=c, labels=[str(i) for i in range(10)], loc='center left', bbox_to_anchor=(1, 0.5), markerscale=20)
 
-plt.show()
+#plt.show()
+
+
+###AutoEncoder
+
+
 
 
